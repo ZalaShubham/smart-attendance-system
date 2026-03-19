@@ -20,7 +20,7 @@ function euclideanDistance(desc1, desc2) {
   return Math.sqrt(sum);
 }
 
-// Helper: Verify face descriptor matches stored one
+// Helper: Verify face descriptor matches stored one (per-student)
 async function verifyFace(studentId, providedDescriptor) {
   try {
     const user = await User.findById(studentId).select('faceDescriptor');
@@ -29,8 +29,8 @@ async function verifyFace(studentId, providedDescriptor) {
     }
     const storedDescriptor = JSON.parse(user.faceDescriptor);
     const distance = euclideanDistance(storedDescriptor, providedDescriptor);
-    // Threshold: lower distance = more similar (typically < 0.6 for same person)
-    const threshold = 0.6;
+    // Threshold: lower distance = more similar. Use stricter default and allow override via env.
+    const threshold = parseFloat(process.env.FACE_MATCH_THRESHOLD || '0.45');
     return {
       verified: distance < threshold,
       distance,
