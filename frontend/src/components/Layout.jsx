@@ -20,7 +20,7 @@ const navItems = (role) => {
       { to: '/daily-routine', label: 'Daily Routine', icon: '📋' },
     ];
   }
-  if (role === 'teacher' || role === 'admin') {
+  if (role === 'teacher') {
     return [
       ...base,
       { to: '/timetable/manage', label: 'Manage Timetable', icon: '✏️' },
@@ -28,7 +28,11 @@ const navItems = (role) => {
     ];
   }
   if (role === 'admin') {
-    return [...base, { to: '/timetable/manage', label: 'Manage Timetable', icon: '✏️' }];
+    return [
+      ...base,
+      { to: '/admin/timetable', label: 'Admin Timetable', icon: '🗂️' },
+      { to: '/attendance/qr', label: 'QR Attendance', icon: '📱' },
+    ];
   }
   return base;
 };

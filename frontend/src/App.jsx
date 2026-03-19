@@ -16,6 +16,7 @@ import Register from './pages/Register';
 import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminTimetableManage from './pages/AdminTimetableManage';
 
 // Feature pages
 import Timetable from './pages/Timetable';
@@ -55,6 +56,7 @@ function App() {
         } />
         <Route path="/timetable" element={<ProtectedRoute><Timetable /></ProtectedRoute>} />
         <Route path="/timetable/manage" element={<ProtectedRoute roles={['teacher', 'admin']}><TimetableManage /></ProtectedRoute>} />
+        <Route path="/admin/timetable" element={<ProtectedRoute roles={['admin']}><AdminTimetableManage /></ProtectedRoute>} />
         <Route path="/attendance/mark" element={<ProtectedRoute roles={['student']}><AttendanceMark /></ProtectedRoute>} />
         <Route path="/attendance/qr" element={<ProtectedRoute roles={['teacher', 'admin']}><AttendanceQRTeacher /></ProtectedRoute>} />
         <Route path="/attendance/live/:lectureId" element={<ProtectedRoute><AttendanceLive /></ProtectedRoute>} />
