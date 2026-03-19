@@ -21,11 +21,14 @@ router.post('/register', async (req, res) => {
     if (userExists) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
+    // Public registration can only create student or teacher, never admin.
+    const safeRole = role === 'teacher' ? 'teacher' : 'student';
+
     const user = await User.create({
       name,
       email,
       password,
-      role: role || 'student',
+      role: safeRole,
       interests: interests || [],
       goals: goals || [],
       improvementAreas: improvementAreas || []
