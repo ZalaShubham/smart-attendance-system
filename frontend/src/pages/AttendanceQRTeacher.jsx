@@ -7,6 +7,8 @@ import api from '../services/api';
 
 export default function AttendanceQRTeacher() {
   const [subject, setSubject] = useState('');
+  const [useLocation, setUseLocation] = useState(false);
+  const [radius, setRadius] = useState(50);
   const [qr, setQr] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -17,8 +19,32 @@ export default function AttendanceQRTeacher() {
     }
     setLoading(true);
     setQr(null);
+
+    let latitude = null;
+    let longitude = null;
+
+    if (useLocation) {
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject);
+        });
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+      } catch (err) {
+        setLoading(false);
+        alert('Could not get your location. Please check browser permissions.');
+        return;
+      }
+    }
+
     try {
-      const { data } = await api.post('/attendance/qr/generate', { subject: subject.trim() });
+      const payload = { subject: subject.trim() };
+      if (useLocation) {
+        payload.latitude = latitude;
+        payload.longitude = longitude;
+        payload.radius = radius;
+      }
+      const { data } = await api.post('/attendance/qr/generate', payload);
       setQr(data);
       console.log('QR Generated:', data);
     } catch (err) {
@@ -43,14 +69,31 @@ export default function AttendanceQRTeacher() {
             placeholder="e.g. Mathematics"
             className="flex-1 px-4 py-2 rounded-lg border border-slate-200"
           />
-          <button
-            onClick={generate}
-            disabled={loading}
-            className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium disabled:opacity-50"
-          >
-            Generate QR
-          </button>
         </div>
+
+        <div className="mb-4">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={useLocation} onChange={e => setUseLocation(e.target.checked)} className="rounded text-primary-600 focus:ring-primary-500"/>
+            <span className="text-sm font-medium text-slate-700">Enable Location Geofencing</span>
+          </label>
+          <p className="text-xs text-slate-500 mt-1">If enabled, students must be near you to mark attendance.</p>
+        </div>
+
+        {useLocation && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Radius (meters)</label>
+            <input type="number" min="10" max="1000" value={radius} onChange={e => setRadius(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-200" />
+            <p className="text-xs text-slate-500 mt-1">Max distance allowed between you and the student.</p>
+          </div>
+        )}
+
+        <button
+          onClick={generate}
+          disabled={loading}
+          className="w-full px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium disabled:opacity-50"
+        >
+          Generate QR
+        </button>
 
         {qr && (
           <div className="mt-6 p-4 bg-slate-50 rounded-xl">

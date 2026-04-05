@@ -20,6 +20,38 @@ function euclideanDistance(desc1, desc2) {
   return Math.sqrt(sum);
 }
 
+// Helper: Calculate distance between two coordinates in meters (Haversine formula)
+function getDistance(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
+  const R = 6371e3; // metres
+  const phi1 = lat1 * Math.PI/180;
+  const phi2 = lat2 * Math.PI/180;
+  const deltaPhi = (lat2-lat1) * Math.PI/180;
+  const deltaLambda = (lon2-lon1) * Math.PI/180;
+
+  const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+            Math.cos(phi1) * Math.cos(phi2) *
+            Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c; // in metres
+}
+
+// Helper: Check location if session has geofencing enabled
+function checkGeofence(session, studentLat, studentLon) {
+  if (session.latitude && session.longitude) {
+    if (!studentLat || !studentLon) {
+      return { allowed: false, message: 'Location is required to mark attendance for this class.' };
+    }
+    const distance = getDistance(session.latitude, session.longitude, studentLat, studentLon);
+    const radius = session.radius || 50;
+    if (distance > radius) {
+      return { allowed: false, message: `You are too far from the class (${Math.round(distance)}m). Must be within ${radius}m.` };
+    }
+  }
+  return { allowed: true };
+}
+
 // Helper: Verify face descriptor matches stored one (per-student)
 async function verifyFace(studentId, providedDescriptor) {
   try {
@@ -80,7 +112,7 @@ router.get('/qr/active', protect, async (req, res) => {
 // @desc    Generate QR code for lecture (teacher) - Unique QR per subject
 router.post('/qr/generate', protect, teacher, async (req, res) => {
   try {
-    const { subject } = req.body;
+    const { subject, latitude, longitude, radius } = req.body;
     if (!subject || !subject.trim()) {
       return res.status(400).json({ message: 'Subject is required' });
     }
@@ -108,6 +140,9 @@ router.post('/qr/generate', protect, teacher, async (req, res) => {
       subject: subject.trim(),
       teacherId: req.user._id.toString(),
       teacherName: req.user.name,
+      latitude,
+      longitude,
+      radius: radius ? parseInt(radius) : 50,
       createdAt: Date.now(),
       expiresAt: Date.now() + 15 * 60 * 1000 // 15 minutes
     });
@@ -129,7 +164,7 @@ router.post('/qr/generate', protect, teacher, async (req, res) => {
 // @desc    Mark attendance via QR scan (student) - requires face verification
 router.post('/qr/scan', protect, async (req, res) => {
   try {
-    const { lectureId, subject, faceDescriptor } = req.body;
+    const { lectureId, subject, faceDescriptor, latitude, longitude } = req.body;
     
     // Verify face
     const verification = await verifyFace(req.user._id, faceDescriptor);
@@ -147,6 +182,11 @@ router.post('/qr/scan', protect, async (req, res) => {
       return res.status(400).json({ message: 'QR code expired' });
     }
     if (session.subject !== subject) return res.status(400).json({ message: 'Subject mismatch' });
+
+    // Geofencing check
+    const geoCheck = checkGeofence(session, latitude, longitude);
+    if (!geoCheck.allowed) return res.status(403).json({ message: geoCheck.message });
+
     const existing = await Attendance.findOne({
       student: req.user._id,
       lectureId,
@@ -177,7 +217,7 @@ router.post('/qr/scan', protect, async (req, res) => {
 // @desc    Mark attendance via proximity - REQUIRES ACTIVE QR SESSION + face verification
 router.post('/proximity', protect, async (req, res) => {
   try {
-    const { subject, faceDescriptor, lectureId } = req.body;
+    const { subject, faceDescriptor, lectureId, latitude, longitude } = req.body;
     
     // CRITICAL: Must have active QR session (attendance can only be marked dynamically)
     if (!lectureId) {
@@ -200,6 +240,10 @@ router.post('/proximity', protect, async (req, res) => {
       return res.status(400).json({ message: 'Subject mismatch with active QR session.' });
     }
     
+    // Geofencing check
+    const geoCheck = checkGeofence(session, latitude, longitude);
+    if (!geoCheck.allowed) return res.status(403).json({ message: geoCheck.message });
+
     // Verify face to prevent abuse
     const verification = await verifyFace(req.user._id, faceDescriptor);
     if (!verification.verified) {
@@ -246,7 +290,7 @@ router.post('/proximity', protect, async (req, res) => {
 // @desc    Mark attendance via face recognition - REQUIRES ACTIVE QR SESSION + face verification
 router.post('/face', protect, async (req, res) => {
   try {
-    const { subject, faceDescriptor, lectureId } = req.body;
+    const { subject, faceDescriptor, lectureId, latitude, longitude } = req.body;
     
     // CRITICAL: Must have active QR session (attendance can only be marked dynamically)
     if (!lectureId) {
@@ -269,6 +313,10 @@ router.post('/face', protect, async (req, res) => {
       return res.status(400).json({ message: 'Subject mismatch with active QR session.' });
     }
     
+    // Geofencing check
+    const geoCheck = checkGeofence(session, latitude, longitude);
+    if (!geoCheck.allowed) return res.status(403).json({ message: geoCheck.message });
+
     // Verify face matches enrolled face
     const verification = await verifyFace(req.user._id, faceDescriptor);
     if (!verification.verified) {

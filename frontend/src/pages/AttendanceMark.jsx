@@ -115,14 +115,28 @@ export default function AttendanceMark() {
 
   const executeAttendance = async (type, data) => {
     setLoading(true);
-    setMessage('');
+    setMessage('Getting your location and marking attendance...');
     try {
+      let latitude = null;
+      let longitude = null;
+
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+        });
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+      } catch (err) {
+        console.warn('Could not get location:', err);
+        // We still proceed, backend will reject if session requires location and we don't have it
+      }
+
       let endpoint = '';
-      let payload = {};
+      let payload = { latitude, longitude };
       
       if (type === 'qr') {
         endpoint = '/attendance/qr/scan';
-        payload = { lectureId: data.lectureId, subject: data.subject, faceDescriptor: data.faceDescriptor };
+        payload = { ...payload, lectureId: data.lectureId, subject: data.subject, faceDescriptor: data.faceDescriptor };
       } else if (type === 'proximity') {
         // Find active QR session for this subject
         const activeSession = activeQRSessions.find(s => s.subject === data.subject);
@@ -130,7 +144,7 @@ export default function AttendanceMark() {
           throw new Error('No active QR session found for this subject. Teacher must generate QR code first.');
         }
         endpoint = '/attendance/proximity';
-        payload = { subject: data.subject, faceDescriptor: data.faceDescriptor, lectureId: activeSession.lectureId };
+        payload = { ...payload, subject: data.subject, faceDescriptor: data.faceDescriptor, lectureId: activeSession.lectureId };
       } else if (type === 'face') {
         // Find active QR session for this subject
         const activeSession = activeQRSessions.find(s => s.subject === data.subject);
@@ -138,7 +152,7 @@ export default function AttendanceMark() {
           throw new Error('No active QR session found for this subject. Teacher must generate QR code first.');
         }
         endpoint = '/attendance/face';
-        payload = { subject: data.subject, faceDescriptor: data.faceDescriptor, lectureId: activeSession.lectureId };
+        payload = { ...payload, subject: data.subject, faceDescriptor: data.faceDescriptor, lectureId: activeSession.lectureId };
       }
       
       await api.post(endpoint, payload);
